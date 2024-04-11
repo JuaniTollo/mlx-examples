@@ -163,14 +163,22 @@ def load(args):
         )
     return train, valid, test
 
+contador = 0
 
 def loss(model, inputs, targets, lengths):
+    global contador  # Declare contador as global to modify its value within the function
     # Run model on inputs
     logits, _ = model(inputs)
     logits = logits.astype(mx.float32)
+    print(type(logits))
+    np.save(f'./experiments/results/ligits/logits{contador}.npy', logits)
+    np.save(f'./experiments/results/targets/targets{contador}.npy', targets)
+    contador += 1
 
     # Mask padding tokens
     length_mask = mx.arange(inputs.shape[1])[None, :] < lengths[:, None]
+    print("target", targets[:,-1])
+    print("target_shape", targets.shape)
 
     # Calculate the loss
     ce = nn.losses.cross_entropy(logits, targets) * length_mask
@@ -214,6 +222,9 @@ def iterate_batches(dset, tokenizer, batch_size, train=False):
 def evaluate(model, dataset, loss, tokenizer, batch_size, num_batches):
     all_losses = []
     ntokens = 0
+    print("batch_size", batch_size)
+    print("num_batches", num_batches)
+    
     for it, batch in zip(
         range(num_batches),
         iterate_batches(dataset, tokenizer, batch_size),
