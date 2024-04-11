@@ -171,7 +171,7 @@ def loss(model, inputs, targets, lengths):
     logits, _ = model(inputs)
     logits = logits.astype(mx.float32)
     print(type(logits))
-    np.save(f'./experiments/results/ligits/logits{contador}.npy', logits)
+    np.save(f'./experiments/results/logits/logits{contador}.npy', logits)
     np.save(f'./experiments/results/targets/targets{contador}.npy', targets)
     contador += 1
 
