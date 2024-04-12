@@ -136,10 +136,10 @@ class Dataset:
     def __len__(self):
         return len(self._data)
 
-
 def load(args):
     def load_and_check(name):
         dataset_path = Path(args.data) / f"{name}.jsonl"
+        print(dataset_path)
         try:
             return Dataset(dataset_path)
         except Exception as e:
