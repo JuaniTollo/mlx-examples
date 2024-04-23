@@ -10,7 +10,8 @@ import mlx.core as mx
 import mlx.nn as nn
 import numpy as np
 from mlx.utils import tree_flatten
-
+import time
+from . import concatenate
 
 def grad_checkpoint(layer):
     """
@@ -280,6 +281,8 @@ def train(
             checkpoint = (
                 Path(args.adapter_file).parent / f"{it:07d}_adapters.safetensors"
             )
+            # Intended cooldown period (no actual delay)
+            time.sleep(30)
             save_adapter(model, checkpoint)
             print(
                 f"Iter {it}: Saved adapter weights to "
@@ -297,3 +300,51 @@ def save_adapter(
 ):
     flattened_tree = tree_flatten(model.trainable_parameters())
     mx.save_safetensors(str(adapter_file), dict(flattened_tree))
+
+contador = 0
+
+def loss_test(model, inputs, targets, lengths):
+    global contador  # Declare contador as global to modify its value within the function
+    # Run model on inputs
+    logits, _ = model(inputs)
+    logits = logits.astype(mx.float32)
+    
+    #print(type(logits))
+    T = concatenate.devolverUltimaPosicionNoNula(targets)
+    print(T)
+    np.save(f'./targets/targets{contador}.npy', T)
+    
+    L = concatenate.devolverUltimaPosicionNoNulaLogits(logits)
+    np.save(f'./logits/logits{contador}.npy', L)
+    contador += 1
+
+    # Mask padding tokens
+    length_mask = mx.arange(inputs.shape[1])[None, :] < lengths[:, None]
+
+
+    # Calculate the loss
+    ce = nn.losses.cross_entropy(logits, targets) * length_mask
+    ntoks = length_mask.sum()
+    ce = ce.sum() / ntoks
+    return ce, ntoks
+
+def evaluate_test(model, dataset, tokenizer, batch_size, num_batches, max_seq_length=2048):
+    all_losses = []
+    ntokens = 0
+    #print("batch_size", batch_size)
+    #print("num_batches", num_batches)
+    i = 0
+    for it, batch in zip(
+        range(num_batches),
+        iterate_batches(dataset, tokenizer, batch_size, max_seq_length=max_seq_length),
+    ):
+        losses, toks = loss_test(model, *batch)
+        all_losses.append((losses * toks).item())
+        ntokens += toks.item()
+        
+        if (i % 100 == 0): time.sleep(10)
+        i += 1
+        
+
+    return np.sum(all_losses) / ntokens
+

@@ -13,10 +13,10 @@ import yaml
 from mlx.utils import tree_flatten
 
 from .tuner.datasets import load_dataset
-from .tuner.trainer import TrainingArgs, TrainingCallback, evaluate, train
+from .tuner.trainer import TrainingArgs, TrainingCallback, evaluate, train, evaluate_test
 from .tuner.utils import build_schedule, linear_to_lora_layers
 from .utils import load, save_config
-
+from .concatenate import concatenateLogitsMatrix, concatenateTargetVectors
 yaml_loader = yaml.SafeLoader
 yaml_loader.add_implicit_resolver(
     "tag:yaml.org,2002:float",
@@ -53,6 +53,7 @@ CONFIG_DEFAULTS = {
     "test_batches": 500,
     "max_seq_length": 2048,
     "lr_schedule": None,
+    "base_model": False,
     "lora_parameters": {"rank": 8, "alpha": 16, "dropout": 0.0, "scale": 10.0},
 }
 
@@ -140,6 +141,8 @@ def build_parser():
         help="Use gradient checkpointing to reduce memory use.",
     )
     parser.add_argument("--seed", type=int, default=0, help="The PRNG seed")
+    
+    parser.add_argument("--base-model", type=bool, default=False, help="For not use adapters")
     return parser
 
 
@@ -161,6 +164,21 @@ def print_trainable_parameters(model):
         f"({trainable_p:.3f}M/{total_p:.3f}M)"
     )
 
+from pathlib import Path
+
+def ensure_directory_exists(dir_path):
+    """
+    Verifica si un directorio existe y lo crea si no es así usando pathlib.
+    
+    Args:
+    dir_path (str or Path): Ruta del directorio a verificar y crear.
+    """
+    path = Path(dir_path)
+    if not path.exists():
+        path.mkdir(parents=True, exist_ok=True)
+        print(f"Directorio '{path}' creado.")
+    else:
+        print(f"Directorio '{path}' ya existe.")
 
 def run(args, training_callback: TrainingCallback = None):
     np.random.seed(args.seed)
@@ -221,20 +239,24 @@ def run(args, training_callback: TrainingCallback = None):
             val_dataset=valid_set,
             training_callback=training_callback,
         )
-
-    # Load the LoRA adapter weights which we assume should exist by this point
-    if not adapter_file.is_file():
-        raise ValueError(
-            f"Adapter file {adapter_file} missing. "
-            "Use --train to learn and save the adapters"
-        )
-    model.load_weights(str(adapter_file), strict=False)
+    if args.base-model == False:
+        # Load the LoRA adapter weights which we assume should exist by this point
+        if not adapter_file.is_file():
+            raise ValueError(
+                f"Adapter file {adapter_file} missing. "
+                "Use --train to learn and save the adapters"
+            )
+        model.load_weights(str(adapter_file), strict=False)
 
     if args.test:
         print("Testing")
         model.eval()
+        
+        # Uso de la función
+        ensure_directory_exists('./logits/')
+        ensure_directory_exists('./targets/')
 
-        test_loss = evaluate(
+        test_loss = evaluate_test(
             model=model,
             dataset=test_set,
             tokenizer=tokenizer,
@@ -243,7 +265,8 @@ def run(args, training_callback: TrainingCallback = None):
         )
 
         test_ppl = math.exp(test_loss)
-
+        concatenateLogitsMatrix()
+        concatenateTargetVectors()
         print(f"Test loss {test_loss:.3f}, Test ppl {test_ppl:.3f}.")
 
 
@@ -266,3 +289,4 @@ if __name__ == "__main__":
         if not args.get(k, None):
             args[k] = v
     run(types.SimpleNamespace(**args))
+
