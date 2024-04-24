@@ -11,7 +11,6 @@ import mlx.nn as nn
 import numpy as np
 from mlx.utils import tree_flatten
 import time
-from mlx_lm import concatenate
 
 def grad_checkpoint(layer):
     """
@@ -301,50 +300,80 @@ def save_adapter(
     flattened_tree = tree_flatten(model.trainable_parameters())
     mx.save_safetensors(str(adapter_file), dict(flattened_tree))
 
-contador = 0
+def devolverUltimaPosicionNoNulaTargets(array):
+    # Inicializa una lista para almacenar los valores deseados
+    valores_finales_no_cero = []
+    indices = []
+    # Itera sobre cada uno de los vectores en el array
+    for vector in array:
+        vector = np.array(vector)
+        # Filtra el vector para quedarte solo con los valores no cero
+        valores_no_cero = vector[vector != 0]
+        indices_no_cero = np.nonzero(vector)[0]
 
-def loss_test(model, inputs, targets, lengths):
+        # Obtiene el último valor no cero, si existe
+        if valores_no_cero.size > 0:
+            ultimo_valor_no_cero = valores_no_cero[-1]
+        else:
+            ultimo_valor_no_cero = None  # O lo que consideres apropiado para indicar que no hay valores no cero
+        # Agrega el valor a la lista
+        valores_finales_no_cero.append(ultimo_valor_no_cero)
+        indices.append(indices_no_cero[-1])
+    indice =  ultimo_valor_no_cero
+    # Muestra los resultados
+    print(np.array(indices))
+    return np.array(valores_finales_no_cero), np.array(indices)
+
+def loss_test(model, inputs, targets, lengths, targets_global, logits_global):
     global contador  # Declare contador as global to modify its value within the function
     # Run model on inputs
     logits, _ = model(inputs)
     logits = logits.astype(mx.float32)
     
-    #print(type(logits))
-    T = concatenate.devolverUltimaPosicionNoNula(targets)
-    print(T)
-    np.save(f'./targets/targets{contador}.npy', T)
-    
-    L = concatenate.devolverUltimaPosicionNoNulaLogits(logits)
-    np.save(f'./logits/logits{contador}.npy', L)
-    contador += 1
+    T, indices = devolverUltimaPosicionNoNulaTargets(targets)
 
+    # Append the element
+    targets_global = np.append(targets_global, T)
+    
+    L = np.array(logits)
+    
+    # Realizar gather
+    rows = np.arange(L.shape[0])
+    
+    logits_global.append(L[rows,indices - 1,:])
+    
     # Mask padding tokens
     length_mask = mx.arange(inputs.shape[1])[None, :] < lengths[:, None]
-
 
     # Calculate the loss
     ce = nn.losses.cross_entropy(logits, targets) * length_mask
     ntoks = length_mask.sum()
     ce = ce.sum() / ntoks
-    return ce, ntoks
+    return ce, ntoks, targets_global, logits_global
 
 def evaluate_test(model, dataset, tokenizer, batch_size, num_batches, max_seq_length=2048):
     all_losses = []
     ntokens = 0
-    #print("batch_size", batch_size)
-    #print("num_batches", num_batches)
+    targets_global = [np.empty(0, dtype=float)]
+    logits_global = []
+
     i = 0
     for it, batch in zip(
         range(num_batches),
         iterate_batches(dataset, tokenizer, batch_size, max_seq_length=max_seq_length),
     ):
-        losses, toks = loss_test(model, *batch)
+        losses, toks, targets_global, logits_global = loss_test(model, *batch, targets_global, logits_global)
         all_losses.append((losses * toks).item())
         ntokens += toks.item()
         
         if (i % 100 == 0): time.sleep(10)
         i += 1
-        
+    
+    targets_global = np.stack(targets_global, axis=0)
+    np.save(f'./targets_global.npy', targets_global)
+    
+    logits_global = np.concatenate(logits_global, axis=0)
+    np.save(f'./logits_global.npy', logits_global)
 
     return np.sum(all_losses) / ntokens
 

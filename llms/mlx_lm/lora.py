@@ -16,7 +16,7 @@ from .tuner.datasets import load_dataset
 from .tuner.trainer import TrainingArgs, TrainingCallback, evaluate, train, evaluate_test
 from .tuner.utils import build_schedule, linear_to_lora_layers
 from .utils import load, save_config
-from .concatenate import concatenateLogitsMatrix, concatenateTargetVectors
+
 yaml_loader = yaml.SafeLoader
 yaml_loader.add_implicit_resolver(
     "tag:yaml.org,2002:float",
@@ -256,6 +256,7 @@ def run(args, training_callback: TrainingCallback = None):
         ensure_directory_exists('./logits/')
         ensure_directory_exists('./targets/')
 
+        
         test_loss = evaluate_test(
             model=model,
             dataset=test_set,
@@ -264,9 +265,14 @@ def run(args, training_callback: TrainingCallback = None):
             num_batches=args.test_batches,
         )
 
+        test_loss = evaluate(
+            model=model,
+            dataset=test_set,
+            tokenizer=tokenizer,
+            batch_size=args.batch_size,
+            num_batches=args.test_batches,
+        )
         test_ppl = math.exp(test_loss)
-        #concatenateLogitsMatrix()
-        #concatenateTargetVectors()
         print(f"Test loss {test_loss:.3f}, Test ppl {test_ppl:.3f}.")
 
 
