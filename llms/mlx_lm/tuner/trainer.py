@@ -340,7 +340,7 @@ def loss_test(model, inputs, targets, lengths, targets_global, logits_global):
     # Realizar gather
     rows = np.arange(L.shape[0])
     
-    logits_global.append(L[rows,indices - 1,:])
+    logits_global.append(L[rows,indices,:])
     
     # Mask padding tokens
     length_mask = mx.arange(inputs.shape[1])[None, :] < lengths[:, None]
