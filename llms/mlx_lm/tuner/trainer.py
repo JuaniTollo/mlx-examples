@@ -11,7 +11,7 @@ import mlx.nn as nn
 import numpy as np
 from mlx.utils import tree_flatten
 import time
-from . import concatenate
+from mlx_lm import concatenate
 
 def grad_checkpoint(layer):
     """

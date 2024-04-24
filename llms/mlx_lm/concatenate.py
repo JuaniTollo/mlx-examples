@@ -6,6 +6,7 @@ def devolverUltimaPosicionNoNula(array):
 
     # Itera sobre cada uno de los vectores en el array
     for vector in array:
+        vector = np.array(vector)
         # Filtra el vector para quedarte solo con los valores no cero
         valores_no_cero = vector[vector != 0]
         # Obtiene el último valor no cero, si existe
@@ -52,11 +53,10 @@ def devolverUltimaPosicionNoNulaLogits(array):
     resultados_finales = []
     i = 1
     for subarray in array:
+        subarray = np.array(subarray)
         # Inicializa una lista para almacenar los últimos valores no cero de cada vector
         ultimos_valores_no_cero = []
-        print(i)
         i +=1
-        print(subarray.shape[0])
         # Itera sobre cada vector en la segunda dimensión (n)
         i_token = 1 
         

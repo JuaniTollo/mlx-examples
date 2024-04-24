@@ -142,7 +142,7 @@ def build_parser():
     )
     parser.add_argument("--seed", type=int, default=0, help="The PRNG seed")
     
-    parser.add_argument("--base-model", type=bool, default=False, help="For not use adapters")
+    parser.add_argument("--base_model", type=bool, default=False, help="For not use adapters")
     return parser
 
 
@@ -239,7 +239,7 @@ def run(args, training_callback: TrainingCallback = None):
             val_dataset=valid_set,
             training_callback=training_callback,
         )
-    if args.base-model == False:
+    if args.base_model == False:
         # Load the LoRA adapter weights which we assume should exist by this point
         if not adapter_file.is_file():
             raise ValueError(
@@ -265,8 +265,8 @@ def run(args, training_callback: TrainingCallback = None):
         )
 
         test_ppl = math.exp(test_loss)
-        concatenateLogitsMatrix()
-        concatenateTargetVectors()
+        #concatenateLogitsMatrix()
+        #concatenateTargetVectors()
         print(f"Test loss {test_loss:.3f}, Test ppl {test_ppl:.3f}.")
 
 
