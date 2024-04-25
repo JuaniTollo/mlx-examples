@@ -11,6 +11,7 @@ import mlx.nn as nn
 import numpy as np
 from mlx.utils import tree_flatten
 import time
+import pandas as pd
 
 def grad_checkpoint(layer):
     """
@@ -171,8 +172,13 @@ def train(
     iterate_batches: callable = iterate_batches,
     training_callback: TrainingCallback = None,
 ):
+    
     print(f"Starting training..., iters: {args.iters}")
-
+    
+    data_loss = []
+    data_val = []
+    best_val_loss = 999999
+    
     if args.grad_checkpoint:
         grad_checkpoint(model.layers[0])
 
@@ -214,6 +220,9 @@ def train(
         # Report training loss if needed
         if it % args.steps_per_report == 0 or it == args.iters:
             train_loss = np.mean(losses)
+            # Nueva fila a insertar
+
+            data_loss.append([it,train_loss])
 
             stop = time.perf_counter()
             learning_rate = optimizer.learning_rate.item()
@@ -229,7 +238,7 @@ def train(
                 f"Trained Tokens {trained_tokens}, "
                 f"Peak mem {peak_mem:.3f} GB"
             )
-
+                        
             if training_callback is not None:
                 train_info = {
                     "iteration": it,
@@ -263,6 +272,8 @@ def train(
             print(
                 f"Iter {it}: " f"Val loss {val_loss:.3f}, " f"Val took {val_time:.3f}s"
             )
+            
+            data_val.append([it, val_loss])
 
             if training_callback is not None:
                 val_info = {
@@ -280,13 +291,46 @@ def train(
             checkpoint = (
                 Path(args.adapter_file).parent / f"{it:07d}_adapters.safetensors"
             )
-            # Intended cooldown period (no actual delay)
-            time.sleep(30)
             save_adapter(model, checkpoint)
+            
             print(
                 f"Iter {it}: Saved adapter weights to "
                 f"{args.adapter_file} and {checkpoint}."
             )
+            if best_val_loss > val_loss:
+                best_val_loss = val_loss
+                
+                # Assuming args.adapter_file is the full path to the current adapter file including filename
+                adapter_file_path = Path(args.adapter_file)
+                
+                # Create a new directory path by appending "_best_val" to the parent directory of the adapter file
+                best_val_directory = (adapter_file_path.parent.name + "_best_val")
+
+                # Define the new file path within the new directory with the same file name as the original adapter file
+                best_val_file_path = best_val_directory +"/"+ adapter_file_path.name
+
+                checkpoint = (
+                Path(best_val_file_path).parent / f"{it:07d}_adapters.safetensors"
+            )
+                # Save the adapter to this new path
+                save_adapter(model, best_val_file_path)
+                save_adapter(model, checkpoint)
+
+                # Print confirmation
+                print(f"Best validation model saved to {best_val_file_path}")
+            # Intended cooldown period (no actual delay)
+            time.sleep(30)
+            
+                
+                 
+
+    # Crear DataFrame al final
+    df_loss = pd.DataFrame(data_loss, columns=['Iteration','Loss'])
+    df_loss.to_csv("Loss.csv")
+    
+        # Crear DataFrame al final
+    df_val = pd.DataFrame(data_val, columns=['Iteration','Val'])
+    df_val.to_csv("Val.csv")
 
     # save final adapter weights
     save_adapter(model, args.adapter_file)
@@ -321,7 +365,6 @@ def devolverUltimaPosicionNoNulaTargets(array):
         indices.append(indices_no_cero[-1])
     indice =  ultimo_valor_no_cero
     # Muestra los resultados
-    print(np.array(indices))
     return np.array(valores_finales_no_cero), np.array(indices)
 
 def loss_test(model, inputs, targets, lengths, targets_global, logits_global):
@@ -371,6 +414,9 @@ def evaluate_test(model, dataset, tokenizer, batch_size, num_batches, max_seq_le
     
     targets_global = np.stack(targets_global, axis=0)
     np.save(f'./targets_global.npy', targets_global)
+    
+    logits_global = np.concatenate(logits_global, axis=0)
+    np.save(f'./logits_global.npy', logits_global)
     
     logits_global = np.concatenate(logits_global, axis=0)
     np.save(f'./logits_global.npy', logits_global)

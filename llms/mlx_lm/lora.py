@@ -203,6 +203,16 @@ def run(args, training_callback: TrainingCallback = None):
 
     adapter_path = Path(args.adapter_path)
     adapter_path.mkdir(parents=True, exist_ok=True)
+
+    # Crear el segundo directorio con el sufijo "_best_val"
+    # Utilizamos 'with_name' para cambiar el nombre del directorio final añadiendo el sufijo
+    best_val_directory_path = adapter_path.with_name(adapter_path.name + "_best_val")
+
+    # Asegurar que el directorio padre del nuevo directorio existe
+    best_val_directory_path.parent.mkdir(parents=True, exist_ok=True)
+    # Crear el directorio con sufijo si no existe
+    best_val_directory_path.mkdir(exist_ok=True)
+
     save_config(vars(args), adapter_path / "adapter_config.json")
     adapter_file = adapter_path / "adapters.safetensors"
 
@@ -252,11 +262,6 @@ def run(args, training_callback: TrainingCallback = None):
         print("Testing")
         model.eval()
         
-        # Uso de la función
-        ensure_directory_exists('./logits/')
-        ensure_directory_exists('./targets/')
-
-        
         test_loss = evaluate_test(
             model=model,
             dataset=test_set,
@@ -274,6 +279,13 @@ def run(args, training_callback: TrainingCallback = None):
         )
         test_ppl = math.exp(test_loss)
         print(f"Test loss {test_loss:.3f}, Test ppl {test_ppl:.3f}.")
+        
+        import csv
+        # Crear y escribir en un archivo CSV
+        with open('test.csv', 'w', newline='') as file:
+            writer = csv.writer(file)
+            writer.writerow(['Test loss', 'Test ppl'])
+            writer.writerow([f"{test_loss:.3f}", f"{test_ppl:.3f}"])
 
 
 if __name__ == "__main__":
