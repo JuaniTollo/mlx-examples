@@ -377,21 +377,18 @@ def devolverUltimaPosicionNoNulaTargets(array):
     # Muestra los resultados
     return (np.array(indices)).tolist()
 
-def loss_test(model, tokenizer, inputs, targets, lengths):
-    pdb.set_trace()
-
+def loss_test(model, inputs, targets, lengths):
     logits, _ = model(inputs)
-    
     logits = logits.astype(mx.float32)
     
     # Mask padding tokens
-    length_mask = mx.arange(inputs.shape[1])[None, :] < lengths[:, None]
-
+    #length_mask = mx.arange(inputs.shape[1])[None, :] < lengths[:, None]
     # Calculate the loss
-    ce = nn.losses.cross_entropy(logits, targets) * length_mask
-    ntoks = length_mask.sum()
-    ce = ce.sum() / ntoks
-    return ce, ntoks, logits
+    # ce = nn.losses.cross_entropy(logits, targets) * length_mask
+    # ntoks = length_mask.sum()
+    # ce = ce.sum() / ntoks
+    # return ce, ntoks, logits
+    return logits, targets
 
 import glob
 import os 
@@ -423,9 +420,7 @@ def concatenate_and_cleanup(prefix):
     print("Concatenation and cleanup completed.")
 
 
-
 def evaluate_test(model, dataset, tokenizer, prefix, max_seq_length=2048):
-    
     all_losses = []
     ntokens = 0
     targets_global = []
@@ -433,55 +428,31 @@ def evaluate_test(model, dataset, tokenizer, prefix, max_seq_length=2048):
     
     index_iterator = iter(range(len(dataset))) if len(dataset) != -1 else iter(int, 1)
     
-    i = 0
-    for _, batch in zip(
-        index_iterator,
-        iterate_batches(
+    for i, (_, batch) in enumerate(tqdm(zip(index_iterator, iterate_batches(
             dataset=dataset,
             tokenizer=tokenizer,
             batch_size=1,
             max_seq_length=max_seq_length,
-        ),
-    ):
-
-        losses, toks, targets, logits = loss_test(model,tokenizer, *batch)
+        )), total=len(dataset), desc="Processing batches")):
         
-        all_losses.append((losses * toks).item())
-        ntokens += toks.item()
-        i +=1
+        logits, targets = loss_test(model, *batch)
+        last_tkn_idx = int(np.nonzero(targets[0])[0][-1])
         
-        #last_tkn_idx = int(np.nonzero(targets[0])[0][-1])
-        indices = devolverUltimaPosicionNoNulaTargets(indices)
+        targets_global.append(np.array(targets)[0, last_tkn_idx])
+        logits_global.append(np.array(logits)[0, last_tkn_idx, :])
         
-        # Generar los índices para la primera dimensión
-        first_dim_indices = np.arange(targets.shape[0]).tolist()
-        
-        targets_global.append(np.array(targets)[first_dim_indices, indices])
-
-        first_dim_logits = np.arange(targets.shape[0]).tolist()        
-        logits_global.append(np.array(logits)[first_dim_logits, indices, :])
-
-        if i % 2 == 0:
-            print(i)
-            
-            np.save(f'./{prefix}_targets_global_{i}.npy', (targets_global))
-            print(targets_global[0].shape, "#targets",len(targets_global))
-            
-            np.save(f'./{prefix}_logits_global_{i}.npy', logits_global)
-            print(logits_global[0].shape, "#logits", len(logits_global))
-            
+        if (i + 1) % 50 == 0 or i == len(dataset) - 1:
+            np.save(f'./{prefix}_targets_global_{i+1}.npy', targets_global)
+            np.save(f'./{prefix}_logits_global_{i+1}.npy', logits_global)
             targets_global = []
             logits_global = []
             gc.collect()
-            #time.sleep(5)
-            
+            time.sleep(5)
+    
+    # Concatenate and cleanup at the end
     concatenate_and_cleanup(prefix)
-            
-    # Guardar el tokenizer en el directorio especificado
+    
+    # Save the tokenizer in the specified directory
     tokenizer_save_path = Path("tokenizer")
     tokenizer_save_path.mkdir(parents=True, exist_ok=True)
-    # Use save_pretrained method to save the tokenizer
     tokenizer.save_pretrained(tokenizer_save_path)
-    
-    return np.sum(all_losses) / ntokens
-

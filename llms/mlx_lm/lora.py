@@ -267,55 +267,24 @@ def run(args, training_callback: TrainingCallback = None):
         print("Testing")
         model.eval()
         
-        test_loss = evaluate_test(
+        evaluate_test(
             model=model,
             dataset=test_set,
             tokenizer=tokenizer,
             prefix="test"
         )
-        val_loss = evaluate_test(
+        evaluate_test(
             model=model,
             dataset=valid_set,
             tokenizer=tokenizer,
             prefix="val"
         )
-        train_loss = evaluate_test(
-            model=model,
-            dataset=train_set,
-            tokenizer=tokenizer,
-            prefix="train"
-        )
-
-        test_ppl = math.exp(test_loss)
-        print(f"Test loss {test_loss:.3f}, Test ppl {test_ppl:.3f}.")
-        
-        val_ppl = math.exp(val_loss)
-        print(f"Val loss {val_ppl:.3f}, Test ppl {val_ppl:.3f}.")
-        
-        # To save ppl results
-        
-        # train_ppl = math.exp(train_loss)
-        # print(f"Test loss {train_ppl:.3f}, Test ppl {train_ppl:.3f}.")
-        
-        # losses = {
-        # 'test': test_loss,
-        # 'val': val_loss,
-        # 'train': train_loss
-        # }
-
-        # perplexities = {
-        #     'test': test_ppl,
-        #     'val': val_ppl,
-        #     'train': train_ppl
-        # }
-        # import csv
-        
-        # for set in ["test", "val", "train"]:
-        #     with open(f'{set}.csv', 'w', newline='') as file:
-        #         writer = csv.writer(file)
-        #         writer.writerow([f'{set} loss', f'{set} ppl'])
-        #         # Use the dictionary to get the correct loss and perplexity for each set
-        #         writer.writerow([f"{losses[set]:.3f}", f"{perplexities[set]:.3f}"])
+        # evaluate_test(
+        #     model=model,
+        #     dataset=train_set,
+        #     tokenizer=tokenizer,
+        #     prefix="train"
+        # )
 
 if __name__ == "__main__":
     parser = build_parser()
