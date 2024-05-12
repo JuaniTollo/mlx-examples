@@ -201,23 +201,23 @@ def run(args, training_callback: TrainingCallback = None):
         print(f"Loading pretrained adapters from {args.resume_adapter_file}")
         model.load_weights(args.resume_adapter_file, strict=False)
 
-    adapter_path = Path(args.adapter_path)
-    adapter_path.mkdir(parents=True, exist_ok=True)
-
-    # Crear el segundo directorio con el sufijo "_best_val"
-    # Utilizamos 'with_name' para cambiar el nombre del directorio final añadiendo el sufijo
-    best_val_directory_path = adapter_path.with_name(adapter_path.name + "_best_val")
-
-    # Asegurar que el directorio padre del nuevo directorio existe
-    best_val_directory_path.parent.mkdir(parents=True, exist_ok=True)
-    # Crear el directorio con sufijo si no existe
-    best_val_directory_path.mkdir(exist_ok=True)
-
-    save_config(vars(args), adapter_path / "adapter_config.json")
-    adapter_file = adapter_path / "adapters.safetensors"
-
     if args.train:
+        adapter_path = Path(args.adapter_path)
+        adapter_path.mkdir(parents=True, exist_ok=True)
+
+        # Crear el segundo directorio con el sufijo "_best_val"
+        # Utilizamos 'with_name' para cambiar el nombre del directorio final añadiendo el sufijo
+        best_val_directory_path = adapter_path.with_name(adapter_path.name + "_best_val")
+
+        # Asegurar que el directorio padre del nuevo directorio existe
+        best_val_directory_path.parent.mkdir(parents=True, exist_ok=True)
+        # Crear el directorio con sufijo si no existe
+        best_val_directory_path.mkdir(exist_ok=True)
+
+        save_config(vars(args), adapter_path / "adapter_config.json")
+        adapter_file = adapter_path / "adapters.safetensors"
         print("Training")
+        
         # init training args
         training_args = TrainingArgs(
             batch_size=args.batch_size,
@@ -239,6 +239,8 @@ def run(args, training_callback: TrainingCallback = None):
                 else args.learning_rate
             )
         )
+        # import pdb
+        # pdb.set_trace()
         # Train model
         train(
             model=model,
@@ -251,7 +253,10 @@ def run(args, training_callback: TrainingCallback = None):
         )
     if args.base_model == False:
         # Load the LoRA adapter weights which we assume should exist by this point
-        if not adapter_file.is_file():
+        adapter_file ='adapters/adapters.safetensors'
+        #adapter_file ='adapters_best_val/adapters.safetensors'
+        
+        if not Path(adapter_file).is_file():
             raise ValueError(
                 f"Adapter file {adapter_file} missing. "
                 "Use --train to learn and save the adapters"
@@ -266,27 +271,51 @@ def run(args, training_callback: TrainingCallback = None):
             model=model,
             dataset=test_set,
             tokenizer=tokenizer,
-            batch_size=args.batch_size,
-            num_batches=args.test_batches,
+            prefix="test"
+        )
+        val_loss = evaluate_test(
+            model=model,
+            dataset=valid_set,
+            tokenizer=tokenizer,
+            prefix="val"
+        )
+        train_loss = evaluate_test(
+            model=model,
+            dataset=train_set,
+            tokenizer=tokenizer,
+            prefix="train"
         )
 
-        test_loss = evaluate(
-            model=model,
-            dataset=test_set,
-            tokenizer=tokenizer,
-            batch_size=args.batch_size,
-            num_batches=args.test_batches,
-        )
         test_ppl = math.exp(test_loss)
         print(f"Test loss {test_loss:.3f}, Test ppl {test_ppl:.3f}.")
         
-        import csv
-        # Crear y escribir en un archivo CSV
-        with open('test.csv', 'w', newline='') as file:
-            writer = csv.writer(file)
-            writer.writerow(['Test loss', 'Test ppl'])
-            writer.writerow([f"{test_loss:.3f}", f"{test_ppl:.3f}"])
+        val_ppl = math.exp(val_loss)
+        print(f"Val loss {val_ppl:.3f}, Test ppl {val_ppl:.3f}.")
+        
+        # To save ppl results
+        
+        # train_ppl = math.exp(train_loss)
+        # print(f"Test loss {train_ppl:.3f}, Test ppl {train_ppl:.3f}.")
+        
+        # losses = {
+        # 'test': test_loss,
+        # 'val': val_loss,
+        # 'train': train_loss
+        # }
 
+        # perplexities = {
+        #     'test': test_ppl,
+        #     'val': val_ppl,
+        #     'train': train_ppl
+        # }
+        # import csv
+        
+        # for set in ["test", "val", "train"]:
+        #     with open(f'{set}.csv', 'w', newline='') as file:
+        #         writer = csv.writer(file)
+        #         writer.writerow([f'{set} loss', f'{set} ppl'])
+        #         # Use the dictionary to get the correct loss and perplexity for each set
+        #         writer.writerow([f"{losses[set]:.3f}", f"{perplexities[set]:.3f}"])
 
 if __name__ == "__main__":
     parser = build_parser()

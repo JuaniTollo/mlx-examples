@@ -12,6 +12,9 @@ import numpy as np
 from mlx.utils import tree_flatten
 import time
 import pandas as pd
+from ..utils import load, save_config
+
+import pdb
 
 def grad_checkpoint(layer):
     """
@@ -92,6 +95,7 @@ def iterate_batches(dataset, tokenizer, batch_size, max_seq_length, train=False)
         for i in indices:
             # Encode batch
             batch = [tokenizer.encode(dataset[j]) for j in batch_idx[i]]
+
             lengths = [len(x) for x in batch]
 
             if max(lengths) > max_seq_length:
@@ -284,11 +288,12 @@ def train(
                 training_callback.on_val_loss_report(val_info)
 
             start = time.perf_counter()
-
+                
         # Save adapter weights
         if it % args.steps_per_save == 0:
             save_adapter(model, args.adapter_file)
             checkpoint = (
+                
                 Path(args.adapter_file).parent / f"{it:07d}_adapters.safetensors"
             )
             save_adapter(model, checkpoint)
@@ -321,16 +326,21 @@ def train(
             # Intended cooldown period (no actual delay)
             time.sleep(30)
             
-                
-                 
+    # from pathlib import Path    
+    # # Guardar el tokenizer en el directorio especificado
+    # tokenizer_save_path =Path("tokenizer")
+    # tokenizer_save_path.mkdir(parents=True, exist_ok=True)
+    # tokenizer.save_pretrained(tokenizer_save_path)
+    
+    # print(f"Tokenizer saved to {tokenizer_save_path}")         
 
     # Crear DataFrame al final
     df_loss = pd.DataFrame(data_loss, columns=['Iteration','Loss'])
-    df_loss.to_csv("Loss.csv")
-    
+    df_loss.to_csv("Train_loss.csv", index=False)
+
         # Crear DataFrame al final
-    df_val = pd.DataFrame(data_val, columns=['Iteration','Val'])
-    df_val.to_csv("Val.csv")
+    df_val = pd.DataFrame(data_val, columns=['Iteration','Loss'])
+    df_val.to_csv("Val_loss.csv", index=False)
 
     # save final adapter weights
     save_adapter(model, args.adapter_file)
@@ -362,28 +372,17 @@ def devolverUltimaPosicionNoNulaTargets(array):
             ultimo_valor_no_cero = None  # O lo que consideres apropiado para indicar que no hay valores no cero
         # Agrega el valor a la lista
         valores_finales_no_cero.append(ultimo_valor_no_cero)
-        indices.append(indices_no_cero[-1])
+        indices.append(int(indices_no_cero[-1]))
     indice =  ultimo_valor_no_cero
     # Muestra los resultados
-    return np.array(valores_finales_no_cero), np.array(indices)
+    return (np.array(indices)).tolist()
 
-def loss_test(model, inputs, targets, lengths, targets_global, logits_global):
-    global contador  # Declare contador as global to modify its value within the function
-    # Run model on inputs
+def loss_test(model, tokenizer, inputs, targets, lengths):
+    pdb.set_trace()
+
     logits, _ = model(inputs)
+    
     logits = logits.astype(mx.float32)
-    
-    T, indices = devolverUltimaPosicionNoNulaTargets(targets)
-
-    # Append the element
-    targets_global = np.append(targets_global, T)
-    
-    L = np.array(logits)
-    
-    # Realizar gather
-    rows = np.arange(L.shape[0])
-    
-    logits_global.append(L[rows,indices,:])
     
     # Mask padding tokens
     length_mask = mx.arange(inputs.shape[1])[None, :] < lengths[:, None]
@@ -392,34 +391,97 @@ def loss_test(model, inputs, targets, lengths, targets_global, logits_global):
     ce = nn.losses.cross_entropy(logits, targets) * length_mask
     ntoks = length_mask.sum()
     ce = ce.sum() / ntoks
-    return ce, ntoks, targets_global, logits_global
+    return ce, ntoks, logits
 
-def evaluate_test(model, dataset, tokenizer, batch_size, num_batches, max_seq_length=2048):
+import glob
+import os 
+import gc  # Garbage collector interface
+from tqdm import tqdm  # Importa tqdm
+import pdb
+
+def concatenate_and_cleanup(prefix):
+    # Concatenar y guardar los arrays de targets
+    all_targets = []
+    files_targets = glob.glob(f'./{prefix}_targets_global_*.npy')
+    for file in sorted(files_targets, key=lambda x: int(x.split('_')[-1].split('.')[0])):
+        all_targets.append(np.load(file))
+    all_targets = np.concatenate(all_targets)
+    np.save(f'./{prefix}_all_targets.npy', all_targets)
+
+    # Concatenar y guardar los arrays de logits
+    all_logits = []
+    files_logits = glob.glob(f'./{prefix}_logits_global_*.npy')
+    for file in sorted(files_logits, key=lambda x: int(x.split('_')[-1].split('.')[0])):
+        all_logits.append(np.load(file))
+    all_logits = np.concatenate(all_logits, axis=0)
+    np.save(f'./{prefix}_all_logits.npy', all_logits)
+
+    # Eliminar los archivos individuales
+    for file in files_targets + files_logits:
+        os.remove(file)
+
+    print("Concatenation and cleanup completed.")
+
+
+
+def evaluate_test(model, dataset, tokenizer, prefix, max_seq_length=2048):
+    
     all_losses = []
     ntokens = 0
-    targets_global = [np.empty(0, dtype=float)]
+    targets_global = []
     logits_global = []
-
+    
+    index_iterator = iter(range(len(dataset))) if len(dataset) != -1 else iter(int, 1)
+    
     i = 0
-    for it, batch in zip(
-        range(num_batches),
-        iterate_batches(dataset, tokenizer, batch_size, max_seq_length=max_seq_length),
+    for _, batch in zip(
+        index_iterator,
+        iterate_batches(
+            dataset=dataset,
+            tokenizer=tokenizer,
+            batch_size=1,
+            max_seq_length=max_seq_length,
+        ),
     ):
-        losses, toks, targets_global, logits_global = loss_test(model, *batch, targets_global, logits_global)
+
+        losses, toks, targets, logits = loss_test(model,tokenizer, *batch)
+        
         all_losses.append((losses * toks).item())
         ntokens += toks.item()
+        i +=1
         
-        if (i % 100 == 0): time.sleep(10)
-        i += 1
-    
-    targets_global = np.stack(targets_global, axis=0)
-    np.save(f'./targets_global.npy', targets_global)
-    
-    logits_global = np.concatenate(logits_global, axis=0)
-    np.save(f'./logits_global.npy', logits_global)
-    
-    logits_global = np.concatenate(logits_global, axis=0)
-    np.save(f'./logits_global.npy', logits_global)
+        #last_tkn_idx = int(np.nonzero(targets[0])[0][-1])
+        indices = devolverUltimaPosicionNoNulaTargets(indices)
+        
+        # Generar los índices para la primera dimensión
+        first_dim_indices = np.arange(targets.shape[0]).tolist()
+        
+        targets_global.append(np.array(targets)[first_dim_indices, indices])
 
+        first_dim_logits = np.arange(targets.shape[0]).tolist()        
+        logits_global.append(np.array(logits)[first_dim_logits, indices, :])
+
+        if i % 2 == 0:
+            print(i)
+            
+            np.save(f'./{prefix}_targets_global_{i}.npy', (targets_global))
+            print(targets_global[0].shape, "#targets",len(targets_global))
+            
+            np.save(f'./{prefix}_logits_global_{i}.npy', logits_global)
+            print(logits_global[0].shape, "#logits", len(logits_global))
+            
+            targets_global = []
+            logits_global = []
+            gc.collect()
+            #time.sleep(5)
+            
+    concatenate_and_cleanup(prefix)
+            
+    # Guardar el tokenizer en el directorio especificado
+    tokenizer_save_path = Path("tokenizer")
+    tokenizer_save_path.mkdir(parents=True, exist_ok=True)
+    # Use save_pretrained method to save the tokenizer
+    tokenizer.save_pretrained(tokenizer_save_path)
+    
     return np.sum(all_losses) / ntokens
 
