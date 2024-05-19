@@ -287,8 +287,6 @@ def run(args, training_callback: TrainingCallback = None):
         #     prefix="train"
         # )
 
-        test_ppl = math.exp(test_loss)
-        print(f"Test loss {test_loss:.3f}, Test ppl {test_ppl:.3f}.")
         
         # To save ppl results
         

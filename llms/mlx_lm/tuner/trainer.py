@@ -397,7 +397,9 @@ def concatenate_and_cleanup(prefix):
     files_targets = glob.glob(f'./{prefix}_targets_global_*.npy')
     for file in sorted(files_targets, key=lambda x: int(x.split('_')[-1].split('.')[0])):
         all_targets.append(np.load(file))
+
     all_targets = np.concatenate(all_targets)
+    all_targets = np.array(all_targets).flatten()
     np.save(f'./{prefix}_all_targets.npy', all_targets)
 
     # Concatenar y guardar los arrays de logits
@@ -417,9 +419,7 @@ def concatenate_and_cleanup(prefix):
 
 
 def evaluate_test(model, dataset, tokenizer, prefix, max_seq_length=2048):
-    
-    all_losses = []
-    ntokens = 0
+
     targets_global = []
     logits_global = []
     
@@ -437,40 +437,29 @@ def evaluate_test(model, dataset, tokenizer, prefix, max_seq_length=2048):
     ):
 
         logits,targets = loss_test(model,tokenizer, *batch)
-        
         i +=1
-        
-        #pdb.set_trace()
         last_tkn_idx = int(np.nonzero(targets[0])[0][-1])
-        #indices = devolverUltimaPosicionNoNulaTargets(targets)
         
         # Generar los índices para la primera dimensión
-        first_dim_indices = np.arange(targets.shape[0]).tolist()
-        
+        first_dim_indices = np.arange(targets.shape[0]).tolist()        
         targets_global.append(np.array(targets)[first_dim_indices, last_tkn_idx])
-
-        #first_dim_logits = np.arange(targets.shape[0]).tolist()        
         logits_global.append(np.array(logits)[0, last_tkn_idx, :])
 
         if i % 50 == 0:            
-            np.save(f'./{prefix}_targets_global_{i}.npy', (targets_global))
-            print(targets_global[0].shape, "#targets",len(targets_global))
-            
+            np.save(f'./{prefix}_targets_global_{i}.npy', (targets_global))            
             np.save(f'./{prefix}_logits_global_{i}.npy', logits_global)
-            print(logits_global[0].shape, "#logits", len(logits_global))
+            
+            print("It", {i})
             
             targets_global = []
             logits_global = []
-            gc.collect()
-            #time.sleep(5)
             
     concatenate_and_cleanup(prefix)
             
-    # Guardar el tokenizer en el directorio especificado
-    tokenizer_save_path = Path("tokenizer")
-    tokenizer_save_path.mkdir(parents=True, exist_ok=True)
-    # Use save_pretrained method to save the tokenizer
-    tokenizer.save_pretrained(tokenizer_save_path)
+    # # Guardar el tokenizer en el directorio especificado
+    # tokenizer_save_path = Path("tokenizer")
+    # tokenizer_save_path.mkdir(parents=True, exist_ok=True)
+    # # Use save_pretrained method to save the tokenizer
+    # tokenizer.save_pretrained(tokenizer_save_path)
     
-    return np.sum(all_losses) / ntokens
 
