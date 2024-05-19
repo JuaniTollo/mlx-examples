@@ -251,16 +251,23 @@ def run(args, training_callback: TrainingCallback = None):
             val_dataset=valid_set,
             training_callback=training_callback,
         )
+    import pdb
     if args.base_model == False:
         # Load the LoRA adapter weights which we assume should exist by this point
-        adapter_file ='adapters/adapters.safetensors'
+       
+        import os
+        print("directorrio de ejecicion",os.getcwd())
+        adapter_file = os.path.join(os.getcwd(), 'adapters_best_val/adapters.safetensors')
         #adapter_file ='adapters_best_val/adapters.safetensors'
+        print(adapter_file, "cargo el adaptador")
         
+        #pdb.set_trace()
         if not Path(adapter_file).is_file():
             raise ValueError(
                 f"Adapter file {adapter_file} missing. "
                 "Use --train to learn and save the adapters"
             )
+        
         model.load_weights(str(adapter_file), strict=False)
 
     if args.test:
@@ -316,6 +323,7 @@ def run(args, training_callback: TrainingCallback = None):
 if __name__ == "__main__":
     parser = build_parser()
     args = parser.parse_args()
+    
     config = args.config
     args = vars(args)
     if config:

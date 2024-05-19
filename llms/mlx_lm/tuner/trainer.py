@@ -5,7 +5,6 @@ from dataclasses import dataclass, field
 from functools import partial
 from pathlib import Path
 from typing import Union
-
 import mlx.core as mx
 import mlx.nn as nn
 import numpy as np
@@ -13,7 +12,9 @@ from mlx.utils import tree_flatten
 import time
 import pandas as pd
 from ..utils import load, save_config
-
+import glob
+import os 
+from tqdm import tqdm  # Importa tqdm
 import pdb
 
 def grad_checkpoint(layer):
@@ -163,7 +164,6 @@ class TrainingCallback:
     def on_val_loss_report(self, val_info: dict):
         """Called to report validation loss at specified intervals or the beginning."""
         pass
-
 
 def train(
     model,
@@ -324,8 +324,7 @@ def train(
                 # Print confirmation
                 print(f"Best validation model saved to {best_val_file_path}")
             # Intended cooldown period (no actual delay)
-            time.sleep(30)
-            
+                        
     # from pathlib import Path    
     # # Guardar el tokenizer en el directorio especificado
     # tokenizer_save_path =Path("tokenizer")
@@ -384,12 +383,6 @@ def loss_test(model, tokenizer, inputs, targets, lengths):
     logits = logits.astype(mx.float32)
     
     return logits,targets
-
-import glob
-import os 
-import gc  # Garbage collector interface
-from tqdm import tqdm  # Importa tqdm
-import pdb
 
 def concatenate_and_cleanup(prefix):
     # Concatenar y guardar los arrays de targets
