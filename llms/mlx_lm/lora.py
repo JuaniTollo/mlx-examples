@@ -273,24 +273,22 @@ def run(args, training_callback: TrainingCallback = None):
             tokenizer=tokenizer,
             prefix="test"
         )
-        val_loss = evaluate_test(
-            model=model,
-            dataset=valid_set,
-            tokenizer=tokenizer,
-            prefix="val"
-        )
-        train_loss = evaluate_test(
-            model=model,
-            dataset=train_set,
-            tokenizer=tokenizer,
-            prefix="train"
-        )
+        
+        # val_loss = evaluate_test(
+        #     model=model,
+        #     dataset=valid_set,
+        #     tokenizer=tokenizer,
+        #     prefix="val"
+        # )
+        # train_loss = evaluate_test(
+        #     model=model,
+        #     dataset=train_set,
+        #     tokenizer=tokenizer,
+        #     prefix="train"
+        # )
 
         test_ppl = math.exp(test_loss)
         print(f"Test loss {test_loss:.3f}, Test ppl {test_ppl:.3f}.")
-        
-        val_ppl = math.exp(val_loss)
-        print(f"Val loss {val_ppl:.3f}, Test ppl {val_ppl:.3f}.")
         
         # To save ppl results
         

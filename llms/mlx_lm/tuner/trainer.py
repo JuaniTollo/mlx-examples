@@ -378,20 +378,12 @@ def devolverUltimaPosicionNoNulaTargets(array):
     return (np.array(indices)).tolist()
 
 def loss_test(model, tokenizer, inputs, targets, lengths):
-    pdb.set_trace()
 
     logits, _ = model(inputs)
     
     logits = logits.astype(mx.float32)
     
-    # Mask padding tokens
-    length_mask = mx.arange(inputs.shape[1])[None, :] < lengths[:, None]
-
-    # Calculate the loss
-    ce = nn.losses.cross_entropy(logits, targets) * length_mask
-    ntoks = length_mask.sum()
-    ce = ce.sum() / ntoks
-    return ce, ntoks, logits
+    return logits,targets
 
 import glob
 import os 
@@ -444,26 +436,23 @@ def evaluate_test(model, dataset, tokenizer, prefix, max_seq_length=2048):
         ),
     ):
 
-        losses, toks, targets, logits = loss_test(model,tokenizer, *batch)
+        logits,targets = loss_test(model,tokenizer, *batch)
         
-        all_losses.append((losses * toks).item())
-        ntokens += toks.item()
         i +=1
         
-        #last_tkn_idx = int(np.nonzero(targets[0])[0][-1])
-        indices = devolverUltimaPosicionNoNulaTargets(indices)
+        #pdb.set_trace()
+        last_tkn_idx = int(np.nonzero(targets[0])[0][-1])
+        #indices = devolverUltimaPosicionNoNulaTargets(targets)
         
         # Generar los índices para la primera dimensión
         first_dim_indices = np.arange(targets.shape[0]).tolist()
         
-        targets_global.append(np.array(targets)[first_dim_indices, indices])
+        targets_global.append(np.array(targets)[first_dim_indices, last_tkn_idx])
 
-        first_dim_logits = np.arange(targets.shape[0]).tolist()        
-        logits_global.append(np.array(logits)[first_dim_logits, indices, :])
+        #first_dim_logits = np.arange(targets.shape[0]).tolist()        
+        logits_global.append(np.array(logits)[0, last_tkn_idx, :])
 
-        if i % 2 == 0:
-            print(i)
-            
+        if i % 50 == 0:            
             np.save(f'./{prefix}_targets_global_{i}.npy', (targets_global))
             print(targets_global[0].shape, "#targets",len(targets_global))
             
